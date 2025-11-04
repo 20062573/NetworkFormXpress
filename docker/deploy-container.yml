@@ -1,0 +1,33 @@
+---
+- name: Deploy HTML Form Submission Web App using Docker
+  hosts: formsub
+  become: true
+
+  tasks:
+    - name: Create web app directory
+      file:
+        path: /home/ubuntu/formsub-html
+        state: directory
+
+    - name: Copy web files
+      copy:
+        src: "{{ item }}"
+        dest: /home/ubuntu/formsub-html/
+      with_items:
+        - form.html
+        - style.css
+        - Dockerfile
+
+    - name: Build Docker image
+      command: docker build -t formsub-html /home/ubuntu/formsub-html/
+
+    - name: Stop existing container (if running)
+      command: docker stop formsub-container
+      ignore_errors: yes
+
+    - name: Remove existing container (if any)
+      command: docker rm formsub-container
+      ignore_errors: yes
+
+    - name: Run Docker container
+      command: docker run -d -p 80:80 --name formsub-container formsub-html
