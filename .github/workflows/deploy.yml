@@ -1,36 +1,46 @@
-name: Deploy to EC2
+name: Deploy FormSub Web App to EC2
 
 on:
   push:
     branches:
-      - main
+      - main        
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Set up SSH
         uses: webfactory/ssh-agent@v0.5.4
         with:
           ssh-private-key: ${{ secrets.FORM_SUB_SSH_KEY }}
 
-      - name: Copy files to EC2
+      - name: Ensure target directory on EC2
         run: |
-          scp -o StrictHostKeyChecking=no -r ansible/web ubuntu@${{ secrets.FORM_SUB_PUBLIC_IP }}:/home/ubuntu/
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.FORM_SUB_PUBLIC_IP }} "mkdir -p /home/ubuntu/formsub-app"
 
-      - name: Deploy container
+      - name: Copy Docker files to EC2
         run: |
-          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.FORM_SUB_PUBLIC_IP }} << 'EOC'
-            cd /home/ubuntu/web
+          scp -o StrictHostKeyChecking=no -r docker/* ubuntu@${{ secrets.FORM_SUB_PUBLIC_IP }}:/home/ubuntu/formsub-app/
+
+      - name: Deploy and Run Docker Container
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.FORM_SUB_PUBLIC_IP }} << 'EOF'
+            cd /home/ubuntu/formsub-app
+
+            echo "Stopping existing containers (if any)..."
             CONTAINERS=$(sudo docker ps -q)
             if [ ! -z "$CONTAINERS" ]; then
               sudo docker stop $CONTAINERS
               sudo docker rm $CONTAINERS
             fi
-            sudo docker build -t formsubapp .
-            sudo docker run -d -p 80:80 formsubapp
-          EOC
+
+            echo "Building new Docker image..."
+            sudo docker build -t formsub-app .
+
+            echo "Running new container..."
+            sudo docker run -d -p 80:80 --name formsub-container formsub-app
+          EOF
